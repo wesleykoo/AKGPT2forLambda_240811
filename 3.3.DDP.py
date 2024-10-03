@@ -317,8 +317,9 @@ torch.set_float32_matmul_precision('high')
 model = GPT(GPTConfig(vocab_size=50304))
 model.to(device)
 if torch.cuda.is_available(): # Use torch compile only on CUDA
-    # print("Using torch compile for CUDA")
     model = torch.compile(model)
+    if master_process:
+        print("Using torch compile for CUDA")
 # logits, loss = model(x, y)
 
 # wrap the model with DDP
