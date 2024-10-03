@@ -7521,6 +7521,7 @@ a.anchor-link {
 <span class="kn">import</span> <span class="nn">torch</span>
 <span class="kn">import</span> <span class="nn">torch.nn</span> <span class="k">as</span> <span class="nn">nn</span>
 <span class="kn">from</span> <span class="nn">torch.nn</span> <span class="kn">import</span> <span class="n">functional</span> <span class="k">as</span> <span class="n">F</span>
+<span class="kn">import</span> <span class="nn">inspect</span>
 
 <span class="c1"># -----------------------------------------------------------</span>
 
@@ -7698,6 +7699,30 @@ a.anchor-link {
                     <span class="n">sd</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="o">.</span><span class="n">copy_</span><span class="p">(</span><span class="n">sd_hf</span><span class="p">[</span><span class="n">k</span><span class="p">])</span>
 
         <span class="k">return</span> <span class="n">model</span>
+    
+    <span class="k">def</span> <span class="nf">configure_optimizers</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">weight_decay</span><span class="p">,</span> <span class="n">learning_rate</span><span class="p">,</span> <span class="n">device</span><span class="p">):</span>
+        <span class="c1"># start with all of the candidate parameters (that require grad)</span>
+        <span class="n">param_dict</span> <span class="o">=</span> <span class="p">{</span><span class="n">pn</span><span class="p">:</span> <span class="n">p</span> <span class="k">for</span> <span class="n">pn</span><span class="p">,</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">named_parameters</span><span class="p">()}</span>
+        <span class="n">param_dict</span> <span class="o">=</span> <span class="p">{</span><span class="n">pn</span><span class="p">:</span> <span class="n">p</span> <span class="k">for</span> <span class="n">pn</span><span class="p">,</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">param_dict</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">requires_grad</span><span class="p">}</span>
+        <span class="c1"># create optim groups. Any parameters that is 2D will be weight decayed, otherwise no.</span>
+        <span class="c1"># i.e. all weight tensors in matmuls + embeddings decay, all biases and layernorms don't.</span>
+        <span class="n">decay_params</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">n</span><span class="p">,</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">param_dict</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">]</span>
+        <span class="n">nodecay_params</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">n</span><span class="p">,</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">param_dict</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">]</span>
+        <span class="n">optim_groups</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">{</span><span class="s1">'params'</span><span class="p">:</span> <span class="n">decay_params</span><span class="p">,</span> <span class="s1">'weight_decay'</span><span class="p">:</span> <span class="n">weight_decay</span><span class="p">},</span>
+            <span class="p">{</span><span class="s1">'params'</span><span class="p">:</span> <span class="n">nodecay_params</span><span class="p">,</span> <span class="s1">'weight_decay'</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">}</span>
+        <span class="p">]</span>
+        <span class="n">num_decay_params</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">decay_params</span><span class="p">)</span>
+        <span class="n">num_nodecay_params</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">nodecay_params</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"num decayed parameter tensors: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">decay_params</span><span class="p">)</span><span class="si">}</span><span class="s2">, with </span><span class="si">{</span><span class="n">num_decay_params</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> parameters"</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"num non-decayed parameter tensors: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">nodecay_params</span><span class="p">)</span><span class="si">}</span><span class="s2">, with </span><span class="si">{</span><span class="n">num_nodecay_params</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> parameters"</span><span class="p">)</span>
+        <span class="c1"># Create AdamW optimizer and use the fused version if it is available</span>
+        <span class="n">fused_available</span> <span class="o">=</span> <span class="s1">'fused'</span> <span class="ow">in</span> <span class="n">inspect</span><span class="o">.</span><span class="n">signature</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">AdamW</span><span class="p">)</span><span class="o">.</span><span class="n">parameters</span>
+        <span class="n">use_fused</span> <span class="o">=</span> <span class="n">fused_available</span> <span class="ow">and</span> <span class="s1">'cuda'</span> <span class="ow">in</span> <span class="n">device</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"using fused AdamW: </span><span class="si">{</span><span class="n">use_fused</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="n">optimizer</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">AdamW</span><span class="p">(</span><span class="n">optim_groups</span><span class="p">,</span> <span class="n">lr</span><span class="o">=</span><span class="n">learning_rate</span><span class="p">,</span> <span class="n">betas</span><span class="o">=</span><span class="p">(</span><span class="mf">0.9</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-8</span><span class="p">,</span> <span class="n">fused</span><span class="o">=</span><span class="n">use_fused</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">optimizer</span>
+    
 <span class="c1"># -----------------------------------------------------------</span>
 <span class="kn">import</span> <span class="nn">tiktoken</span>
 
@@ -7747,9 +7772,18 @@ a.anchor-link {
 <span class="n">torch</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="mi">1337</span><span class="p">)</span>
 <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>
     <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="mi">1337</span><span class="p">)</span>
+    
+<span class="c1"># for gradient accumulation</span>
+<span class="n">total_batch_size</span> <span class="o">=</span> <span class="mi">524288</span> <span class="c1"># 2**19, ~0.5M, in number of tokens</span>
+<span class="n">B</span> <span class="o">=</span> <span class="mi">16</span> <span class="c1"># micro batch size</span>
+<span class="n">T</span> <span class="o">=</span> <span class="mi">1024</span> <span class="c1"># sequence length</span>
+<span class="k">assert</span> <span class="n">total_batch_size</span> <span class="o">%</span> <span class="p">(</span><span class="n">B</span> <span class="o">*</span> <span class="n">T</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">"make sure total_batch_size is divisible by B * T"</span>
+<span class="n">grad_accum_steps</span> <span class="o">=</span> <span class="n">total_batch_size</span> <span class="o">//</span> <span class="p">(</span><span class="n">B</span> <span class="o">*</span> <span class="n">T</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"total desired batch size: </span><span class="si">{</span><span class="n">total_batch_size</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"=&gt; calculated gradient accumulation steps: </span><span class="si">{</span><span class="n">grad_accum_steps</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
 <span class="c1"># get a data batch by using the DataLoaderLite</span>
-<span class="n">train_loader</span> <span class="o">=</span> <span class="n">DataLoaderLite</span><span class="p">(</span><span class="n">B</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="mi">1024</span><span class="p">)</span> <span class="c1"># previously 4,32--&gt; GPT-2, 16,1024</span>
+<span class="n">train_loader</span> <span class="o">=</span> <span class="n">DataLoaderLite</span><span class="p">(</span><span class="n">B</span><span class="o">=</span><span class="n">B</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">)</span> <span class="c1"># previously 4,32--&gt; GPT-2, 16,1024</span>
 
 <span class="c1"># set the precision to high</span>
 <span class="n">torch</span><span class="o">.</span><span class="n">set_float32_matmul_precision</span><span class="p">(</span><span class="s1">'high'</span><span class="p">)</span>
@@ -7762,19 +7796,54 @@ a.anchor-link {
     <span class="n">model</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
 <span class="c1"># logits, loss = model(x, y)</span>
 
-<span class="n">optimizer</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">AdamW</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="mf">3e-4</span><span class="p">)</span>
-<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">50</span><span class="p">):</span>
+<span class="c1"># learning rate decay scheduler</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="n">max_lr</span> <span class="o">=</span> <span class="mf">6e-4</span>
+<span class="n">min_lr</span> <span class="o">=</span> <span class="n">max_lr</span> <span class="o">*</span> <span class="mf">0.1</span>
+<span class="n">warmup_steps</span> <span class="o">=</span> <span class="mi">10</span>
+<span class="n">max_steps</span> <span class="o">=</span> <span class="mi">50</span> <span class="c1"># 19,073 steps is ~1 epoch, if data is 10B tokens and batch size 0.5M tokens</span>
+<span class="k">def</span> <span class="nf">get_lr</span><span class="p">(</span><span class="n">it</span><span class="p">):</span>
+    <span class="c1"># 1) linear warmup for warmup_iters steps</span>
+    <span class="k">if</span> <span class="n">it</span> <span class="o">&lt;</span> <span class="n">warmup_steps</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">max_lr</span> <span class="o">*</span> <span class="p">(</span><span class="n">it</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="n">warmup_steps</span>
+    <span class="c1"># 2) if it &gt; lr_decay_iters, return min learning rate</span>
+    <span class="k">if</span> <span class="n">it</span> <span class="o">&gt;</span> <span class="n">max_steps</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">min_lr</span>
+    <span class="c1"># 3) in between, use cosine decay down to min learning rate</span>
+    <span class="n">decay_ratio</span> <span class="o">=</span> <span class="p">(</span><span class="n">it</span> <span class="o">-</span> <span class="n">warmup_steps</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">max_steps</span> <span class="o">-</span> <span class="n">warmup_steps</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">decay_ratio</span> <span class="o">&lt;=</span> <span class="mi">1</span>
+    <span class="n">coeff</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="n">math</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">decay_ratio</span><span class="p">))</span> <span class="c1"># coeff starts at 1 and goes to 0</span>
+    <span class="k">return</span> <span class="n">min_lr</span> <span class="o">+</span> <span class="n">coeff</span> <span class="o">*</span> <span class="p">(</span><span class="n">max_lr</span> <span class="o">-</span> <span class="n">min_lr</span><span class="p">)</span>
+        
+<span class="c1"># optimizer</span>
+<span class="c1"># optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, betas=(0.9, 0.95), eps=1e-8)</span>
+<span class="n">optimizer</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">configure_optimizers</span><span class="p">(</span><span class="n">weight_decay</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">learning_rate</span><span class="o">=</span><span class="mf">6e-4</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+
+<span class="c1"># training loop</span>
+<span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">50</span><span class="p">):</span>
     <span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-    <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">train_loader</span><span class="o">.</span><span class="n">next_batch</span><span class="p">()</span>
-    <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">),</span> <span class="n">y</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
     <span class="n">optimizer</span><span class="o">.</span><span class="n">zero_grad</span><span class="p">()</span>
-    <span class="k">if</span> <span class="n">device</span> <span class="o">==</span> <span class="s2">"cuda"</span> <span class="ow">and</span> <span class="n">cuda_available</span><span class="p">:</span>
-        <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">autocast</span><span class="p">(</span><span class="n">device_type</span><span class="o">=</span><span class="s2">"cuda"</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span><span class="p">):</span>
+    <span class="n">loss_accum</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="k">for</span> <span class="n">micro_step</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">grad_accum_steps</span><span class="p">):</span> <span class="c1"># loop over the gradient accumulation steps</span>
+        <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">train_loader</span><span class="o">.</span><span class="n">next_batch</span><span class="p">()</span>
+        <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">),</span> <span class="n">y</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">device</span> <span class="o">==</span> <span class="s2">"cuda"</span> <span class="ow">and</span> <span class="n">cuda_available</span><span class="p">:</span>
+            <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">autocast</span><span class="p">(</span><span class="n">device_type</span><span class="o">=</span><span class="s2">"cuda"</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span><span class="p">):</span>
+                <span class="c1"># print("using autocast")</span>
+                <span class="n">logits</span><span class="p">,</span> <span class="n">loss</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+                <span class="c1"># import code; code.interact(local=locals()) # debug</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># print("using no autocast")</span>
             <span class="n">logits</span><span class="p">,</span> <span class="n">loss</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
-            <span class="c1"># import code; code.interact(local=locals()) # debug</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">logits</span><span class="p">,</span> <span class="n">loss</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
-    <span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+        <span class="n">loss</span> <span class="o">=</span> <span class="n">loss</span> <span class="o">/</span> <span class="n">grad_accum_steps</span> <span class="c1"># normalize the loss</span>
+        <span class="n">loss_accum</span> <span class="o">+=</span> <span class="n">loss</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span>
+        <span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+    <span class="c1"># clip the gradient at 1.0</span>
+    <span class="n">norm</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">clip_grad_norm_</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="mf">1.0</span><span class="p">)</span>
+    <span class="c1"># detrmine and set the learning rate for this step</span>
+    <span class="n">lr</span> <span class="o">=</span> <span class="n">get_lr</span><span class="p">(</span><span class="n">step</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">param_group</span> <span class="ow">in</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">param_groups</span><span class="p">:</span>
+        <span class="n">param_group</span><span class="p">[</span><span class="s1">'lr'</span><span class="p">]</span> <span class="o">=</span> <span class="n">lr</span>
     <span class="n">optimizer</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
     <span class="k">if</span> <span class="n">device</span> <span class="o">==</span> <span class="s2">"cuda"</span> <span class="ow">and</span> <span class="n">cuda_available</span><span class="p">:</span>
         <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
@@ -7783,7 +7852,7 @@ a.anchor-link {
     <span class="n">t1</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
     <span class="n">dt</span> <span class="o">=</span> <span class="p">(</span><span class="n">t1</span> <span class="o">-</span> <span class="n">t0</span><span class="p">)</span><span class="o">*</span><span class="mi">1000</span> <span class="c1"># time difference in ms</span>
     <span class="n">tokens_per_second</span> <span class="o">=</span> <span class="p">(</span><span class="n">train_loader</span><span class="o">.</span><span class="n">B</span> <span class="o">*</span> <span class="n">train_loader</span><span class="o">.</span><span class="n">T</span><span class="p">)</span> <span class="o">/</span> <span class="n">dt</span> <span class="o">*</span> <span class="mi">1000</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"step </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">, loss: </span><span class="si">{</span><span class="n">loss</span><span class="o">.</span><span class="n">item</span><span class="p">()</span><span class="si">}</span><span class="s2">, dt: </span><span class="si">{</span><span class="n">dt</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">ms, </span><span class="si">{</span><span class="n">tokens_per_second</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> tokens/s"</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"step </span><span class="si">{</span><span class="n">step</span><span class="si">:</span><span class="s2">4d</span><span class="si">}</span><span class="s2"> | loss: </span><span class="si">{</span><span class="n">loss_accum</span><span class="o">.</span><span class="n">item</span><span class="p">()</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2"> | lr: </span><span class="si">{</span><span class="n">lr</span><span class="si">:</span><span class="s2">.4e</span><span class="si">}</span><span class="s2"> | norm: </span><span class="si">{</span><span class="n">norm</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> | dt: </span><span class="si">{</span><span class="n">dt</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">ms | tok/sec: </span><span class="si">{</span><span class="n">tokens_per_second</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
 <span class="c1"># print(logits.shape)</span>
 <span class="c1"># print(loss)</span>
