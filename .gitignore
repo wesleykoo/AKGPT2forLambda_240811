@@ -1,0 +1,20 @@
+# # Ignore compiled files
+# *.class
+
+# # Ignore log files
+# *.log
+
+# # Ignore all files in the 'node_modules' directory
+# node_modules/
+
+# # Ignore environment files
+# .env
+
+# # Ignore all files with .tmp extension
+# *.tmp
+
+# Ignore all files in a specific directory
+edu_fineweb10B/
+
+# # Ignore a specific file
+# secret.txt
