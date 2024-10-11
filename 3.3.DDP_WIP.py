@@ -214,47 +214,23 @@ class GPT(nn.Module):
 import tiktoken
 import numpy as np
 
-def load_tokens(filename):
-    npt = np.load(filename)
-    ptt = torch.tensor(npt, dtype=torch.long)
-    return ptt
-
 class DataLoaderLite:
-    def __init__(self, B, T, process_rank, num_processes, split):
+    def __init__(self, B, T, process_rank, num_processes):
         self.B = B
         self.T = T
         self.process_rank = process_rank
         self.num_processes = num_processes
-        assert split in {'train', 'val'}
         
-        # # at init load tokens from disk and store them in memory
-        # with open('input.txt', 'r') as f:
-        #     text = f.read()
-        # enc = tiktoken.get_encoding('gpt2')
-        # tokens = enc.encode(text)
-        # self.tokens = torch.tensor(tokens)
-        # # print(f"loaded {len(self.tokens)} tokens")
-        # # print(f"1 epoch = {len(self.tokens) // (B * T * num_processes)} batches")
+        # at init load tokens from disk and store them in memory
+        with open('input.txt', 'r') as f:
+            text = f.read()
+        enc = tiktoken.get_encoding('gpt2')
+        tokens = enc.encode(text)
+        self.tokens = torch.tensor(tokens)
+        # print(f"loaded {len(self.tokens)} tokens")
+        # print(f"1 epoch = {len(self.tokens) // (B * T * num_processes)} batches")
 
-        # # state, initialize the position
-        # self.current_position = self.B * self.T * self.process_rank
-
-        # get the shard filenames
-        data_root = "edu_fineweb10B"
-        shards = os.listdir(data_root)
-        shards = [s for s in shards if split in s]
-        shards = sorted(shards)
-        shards = [os.path.join(data_root, s) for s in shards]
-        self.shards = shards
-        assert len(shards) > 0, f"no shards found for split {split}"
-        if master_process:
-            print(f"found {len(shards)} shards for split {split}")
-        self.reset()
-
-    def reset(self):
-        # state, init at shard zero
-        self.current_shard = 0
-        self.tokens = load_tokens(self.shards[self.current_shard])
+        # state, initialize the position
         self.current_position = self.B * self.T * self.process_rank
 
     def next_batch(self):
@@ -264,11 +240,9 @@ class DataLoaderLite:
         y = (buf[1:]).view(B, T) # targets
         # advance the position in the tensor
         self.current_position += B * T * self.num_processes
-        # if loading the next batch would be out of bounds, advance to next shard
+        # if loading the next batch would be out of bounds, reset
         if self.current_position + (B * T * self.num_processes + 1) > len(self.tokens):
-            self.current_shard = (self.current_shard + 1) % len(self.shards)
-            self.tokens = load_tokens(self.shards[self.current_shard])
-            self.current_position = B * T * self.process_rank
+            self.current_position = self.B * self.T * self.process_rank
         return x, y
 
 
@@ -312,7 +286,6 @@ else:
         cuda_available = True
     elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
         device = "mps"
-        cuda_available = False
     print(f"using device: {device}")
 # device = "cpu" # force CPU for now
 
@@ -322,19 +295,14 @@ if torch.cuda.is_available():
     torch.cuda.manual_seed(1337)
     
 # for gradient accumulation
-total_batch_size = 524288 # = 2**19 tokens from GPT2 paper, we are training 2**19 tokens per step, ~0.5M
-# Assuming T = 1024, ddp_world_size = 8, 64 batches, it gives 64 (=2^6)batches x T:1024 (=2^10)tokens x 8 (=2^3)GPUs = 524,288 (=2^19) tokens, which is total_batch_size
-# Thus, formual for max B = total_batch_size / (T * ddp_world_size) 
-# micro batch size, 2**19 tokens / 2**10 tokens per T / 2**1 GPUs = 2**8 batches
+total_batch_size = 524288 # 2**19, ~0.5M, in number of tokens
+B = 4 #16 # micro batch size
 T = 1024 # sequence length
-B = 2**6 # micro batch size, depends on GPU memory thus start with max B and reduce if needed
-# You can calculate grad_accum_steps by total_batch_size // (B * T * ddp_world_size)
 assert total_batch_size % (B * T * ddp_world_size) == 0, "make sure total_batch_size is divisible by B * T * ddp_world_size"
 grad_accum_steps = total_batch_size // (B * T * ddp_world_size)
 if master_process:
     print(f"total desired batch size: {total_batch_size}")
     print(f"=> calculated gradient accumulation steps: {grad_accum_steps}")
-    print(f"B: {B}, T: {T}, ddp_world_size: {ddp_world_size}")
 
 # # checkpoint code if multiple GPUs are working
 # print("I am GPU", ddp_rank)
@@ -343,7 +311,7 @@ if master_process:
 # # torchrun --standalone --nproc_per_node=8 train_gpt2.py
 
 # get a data batch by using the DataLoaderLite
-train_loader = DataLoaderLite(B=B, T=T, process_rank=ddp_rank, num_processes=ddp_world_size, split='train') # DDP implementation
+train_loader = DataLoaderLite(B=B, T=T, process_rank=ddp_rank, num_processes=ddp_world_size) # DDP implementation
 
 # set the precision to high
 torch.set_float32_matmul_precision('high')
@@ -352,8 +320,9 @@ torch.set_float32_matmul_precision('high')
 model = GPT(GPTConfig(vocab_size=50304))
 model.to(device)
 
-use_compile = False # torch.compile interferes with HellaSwag eval and Generation. TODO fix
-if use_compile and cuda_available:
+# use torch compile if CUDA is available
+use_compile = False
+if use_compile and cuda_available: # Use torch compile only on CUDA
     model = torch.compile(model)
     if master_process:
         print("Using torch compile for CUDA")
@@ -368,10 +337,8 @@ raw_model = model.module if ddp else model # always contains the "raw" unwrapped
 import math
 max_lr = 6e-4
 min_lr = max_lr * 0.1
-# We are training 2**19 (=524,288) tokens per step. To train 10B tokens, it takes 19,073(=10e9 / 2**19) steps.
-# GPT2 paper said they warmed up for 375M tokens, which is 715(=375e6 / 2**19) steps with our settings.
-warmup_steps = 715 # 715 is very mild learning rate decay thus we can be more aggressive such as 100!
-max_steps = 19073 # 10B tokens / 2**19 tokens per step
+warmup_steps = 10
+max_steps = 50 # 19,073 steps is ~1 epoch, if data is 10B tokens and batch size 0.5M tokens
 def get_lr(it):
     # 1) linear warmup for warmup_iters steps
     if it < warmup_steps:
@@ -390,16 +357,15 @@ def get_lr(it):
 optimizer = raw_model.configure_optimizers(weight_decay=0.1, learning_rate=6e-4, device=device)
 
 # training loop
-for step in range(max_steps):
+for step in range(50):
     t0 = time.time()
-    
-    model.train()
     optimizer.zero_grad()
     loss_accum = 0.0
     for micro_step in range(grad_accum_steps): # loop over the gradient accumulation steps
         x, y = train_loader.next_batch()
         x, y = x.to(device), y.to(device)
-        # with torch.autocast(device_type=device, dtype=torch.bfloat16): # AK code but not working
+        
+        # with torch.autocast(device_type=device.split(':')[0], dtype=torch.bfloat16):
         #     logits, loss = model(x, y)
         
         if cuda_available:
@@ -408,7 +374,7 @@ for step in range(max_steps):
                 logits, loss = model(x, y)
                 # import code; code.interact(local=locals()) # debug
         else:
-            print("using no autocast because no CUDA")
+            print("using no autocast")
             logits, loss = model(x, y)
         # we have to scale the loss to account for the gradient accumulation.
         # because the gradients just add up on each successive backward() pass
@@ -432,7 +398,7 @@ for step in range(max_steps):
     optimizer.step()
     
     # calculate tokens per second
-    if cuda_available:
+    if torch.cuda.is_available():
         torch.cuda.synchronize()
     elif device == "mps":
         torch.mps.synchronize()

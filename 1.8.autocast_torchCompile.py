@@ -232,6 +232,8 @@ torch.set_float32_matmul_precision('high')
 # get logits
 model = GPT(GPTConfig())
 model.to(device)
+
+# torch compile causes errors in different CUDA (12.4) vs CUDA 12.2 seems to work
 if torch.cuda.is_available(): # Use torch compile only on CUDA
     print("Using torch compile for CUDA")
     model = torch.compile(model)
