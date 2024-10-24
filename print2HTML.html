@@ -7517,7 +7517,7 @@ a.anchor-link {
 <div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div>
 <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="cm-editor cm-s-jupyter">
-<div class="highlight hl-python"><pre><span></span><span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span>
+<div class="highlight hl-ipython3"><pre><span></span><span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span>
 <span class="kn">import</span> <span class="nn">torch</span>
 <span class="kn">import</span> <span class="nn">torch.nn</span> <span class="k">as</span> <span class="nn">nn</span>
 <span class="kn">from</span> <span class="nn">torch.nn</span> <span class="kn">import</span> <span class="n">functional</span> <span class="k">as</span> <span class="n">F</span>
@@ -7733,23 +7733,47 @@ a.anchor-link {
 <span class="kn">import</span> <span class="nn">tiktoken</span>
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
 
+<span class="k">def</span> <span class="nf">load_tokens</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+    <span class="n">npt</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+    <span class="n">ptt</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">npt</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">long</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">ptt</span>
+
 <span class="k">class</span> <span class="nc">DataLoaderLite</span><span class="p">:</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">B</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">process_rank</span><span class="p">,</span> <span class="n">num_processes</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">B</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">process_rank</span><span class="p">,</span> <span class="n">num_processes</span><span class="p">,</span> <span class="n">split</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">B</span> <span class="o">=</span> <span class="n">B</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">T</span> <span class="o">=</span> <span class="n">T</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">process_rank</span> <span class="o">=</span> <span class="n">process_rank</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">num_processes</span> <span class="o">=</span> <span class="n">num_processes</span>
+        <span class="k">assert</span> <span class="n">split</span> <span class="ow">in</span> <span class="p">{</span><span class="s1">'train'</span><span class="p">,</span> <span class="s1">'val'</span><span class="p">}</span>
         
-        <span class="c1"># at init load tokens from disk and store them in memory</span>
-        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">'input.txt'</span><span class="p">,</span> <span class="s1">'r'</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
-            <span class="n">text</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
-        <span class="n">enc</span> <span class="o">=</span> <span class="n">tiktoken</span><span class="o">.</span><span class="n">get_encoding</span><span class="p">(</span><span class="s1">'gpt2'</span><span class="p">)</span>
-        <span class="n">tokens</span> <span class="o">=</span> <span class="n">enc</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">tokens</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">tokens</span><span class="p">)</span>
-        <span class="c1"># print(f"loaded {len(self.tokens)} tokens")</span>
-        <span class="c1"># print(f"1 epoch = {len(self.tokens) // (B * T * num_processes)} batches")</span>
+        <span class="c1"># # at init load tokens from disk and store them in memory</span>
+        <span class="c1"># with open('input.txt', 'r') as f:</span>
+        <span class="c1">#     text = f.read()</span>
+        <span class="c1"># enc = tiktoken.get_encoding('gpt2')</span>
+        <span class="c1"># tokens = enc.encode(text)</span>
+        <span class="c1"># self.tokens = torch.tensor(tokens)</span>
+        <span class="c1"># # print(f"loaded {len(self.tokens)} tokens")</span>
+        <span class="c1"># # print(f"1 epoch = {len(self.tokens) // (B * T * num_processes)} batches")</span>
 
-        <span class="c1"># state, initialize the position</span>
+        <span class="c1"># # state, initialize the position</span>
+        <span class="c1"># self.current_position = self.B * self.T * self.process_rank</span>
+
+        <span class="c1"># get the shard filenames</span>
+        <span class="n">data_root</span> <span class="o">=</span> <span class="s2">"edu_fineweb10B"</span>
+        <span class="n">shards</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">data_root</span><span class="p">)</span>
+        <span class="n">shards</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">shards</span> <span class="k">if</span> <span class="n">split</span> <span class="ow">in</span> <span class="n">s</span><span class="p">]</span>
+        <span class="n">shards</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">shards</span><span class="p">)</span>
+        <span class="n">shards</span> <span class="o">=</span> <span class="p">[</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">data_root</span><span class="p">,</span> <span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">shards</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">shards</span> <span class="o">=</span> <span class="n">shards</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">shards</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"no shards found for split </span><span class="si">{</span><span class="n">split</span><span class="si">}</span><span class="s2">"</span>
+        <span class="k">if</span> <span class="n">master_process</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">shards</span><span class="p">)</span><span class="si">}</span><span class="s2"> shards for split </span><span class="si">{</span><span class="n">split</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># state, init at shard zero</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_shard</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tokens</span> <span class="o">=</span> <span class="n">load_tokens</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shards</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_shard</span><span class="p">])</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">current_position</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">B</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">T</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_rank</span>
 
     <span class="k">def</span> <span class="nf">next_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -7759,9 +7783,11 @@ a.anchor-link {
         <span class="n">y</span> <span class="o">=</span> <span class="p">(</span><span class="n">buf</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">T</span><span class="p">)</span> <span class="c1"># targets</span>
         <span class="c1"># advance the position in the tensor</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">current_position</span> <span class="o">+=</span> <span class="n">B</span> <span class="o">*</span> <span class="n">T</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_processes</span>
-        <span class="c1"># if loading the next batch would be out of bounds, reset</span>
+        <span class="c1"># if loading the next batch would be out of bounds, advance to next shard</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_position</span> <span class="o">+</span> <span class="p">(</span><span class="n">B</span> <span class="o">*</span> <span class="n">T</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_processes</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tokens</span><span class="p">):</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">current_position</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">B</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">T</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_rank</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">current_shard</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current_shard</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shards</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">tokens</span> <span class="o">=</span> <span class="n">load_tokens</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shards</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">current_shard</span><span class="p">])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">current_position</span> <span class="o">=</span> <span class="n">B</span> <span class="o">*</span> <span class="n">T</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">process_rank</span>
         <span class="k">return</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span>
 
 
@@ -7789,6 +7815,7 @@ a.anchor-link {
     <span class="n">ddp_world_size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">'WORLD_SIZE'</span><span class="p">])</span>
     <span class="n">device</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">'cuda:</span><span class="si">{</span><span class="n">ddp_local_rank</span><span class="si">}</span><span class="s1">'</span>
     <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">set_device</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+    <span class="n">cuda_available</span> <span class="o">=</span> <span class="kc">True</span>
     <span class="n">master_process</span> <span class="o">=</span> <span class="n">ddp_rank</span> <span class="o">==</span> <span class="mi">0</span> <span class="c1"># this process will do logging, checkpointing etc.</span>
 <span class="k">else</span><span class="p">:</span>
     <span class="c1"># vanilla, non-DDP run</span>
@@ -7798,10 +7825,13 @@ a.anchor-link {
     <span class="n">master_process</span> <span class="o">=</span> <span class="kc">True</span>
     <span class="c1"># attempt to autodetect device</span>
     <span class="n">device</span> <span class="o">=</span> <span class="s2">"cpu"</span>
+    <span class="n">cuda_available</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>
         <span class="n">device</span> <span class="o">=</span> <span class="s2">"cuda"</span>
+        <span class="n">cuda_available</span> <span class="o">=</span> <span class="kc">True</span>
     <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">backends</span><span class="p">,</span> <span class="s2">"mps"</span><span class="p">)</span> <span class="ow">and</span> <span class="n">torch</span><span class="o">.</span><span class="n">backends</span><span class="o">.</span><span class="n">mps</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>
         <span class="n">device</span> <span class="o">=</span> <span class="s2">"mps"</span>
+        <span class="n">cuda_available</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"using device: </span><span class="si">{</span><span class="n">device</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 <span class="c1"># device = "cpu" # force CPU for now</span>
 
@@ -7810,15 +7840,22 @@ a.anchor-link {
 <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>
     <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="mi">1337</span><span class="p">)</span>
     
+<span class="n">enc</span> <span class="o">=</span> <span class="n">tiktoken</span><span class="o">.</span><span class="n">get_encoding</span><span class="p">(</span><span class="s2">"gpt2"</span><span class="p">)</span>
+    
 <span class="c1"># for gradient accumulation</span>
-<span class="n">total_batch_size</span> <span class="o">=</span> <span class="mi">524288</span> <span class="c1"># 2**19, ~0.5M, in number of tokens</span>
-<span class="n">B</span> <span class="o">=</span> <span class="mi">4</span> <span class="c1">#16 # micro batch size</span>
+<span class="n">total_batch_size</span> <span class="o">=</span> <span class="mi">524288</span> <span class="c1"># = 2**19 tokens from GPT2 paper, we are training 2**19 tokens per step, ~0.5M</span>
+<span class="c1"># Assuming T = 1024, ddp_world_size = 8, 64 batches, it gives 64 (=2^6)batches x T:1024 (=2^10)tokens x 8 (=2^3)GPUs = 524,288 (=2^19) tokens, which is total_batch_size</span>
+<span class="c1"># Thus, formual for MAX micro batch size B = total_batch_size / (T * ddp_world_size) </span>
+<span class="c1"># MAX micro batch size B, 2**19 tokens / 2**10 tokens per T / 2**1 GPUs = 2**8 batches</span>
 <span class="n">T</span> <span class="o">=</span> <span class="mi">1024</span> <span class="c1"># sequence length</span>
+<span class="n">B</span> <span class="o">=</span> <span class="mi">2</span><span class="o">**</span><span class="mi">5</span> <span class="c1"># micro batch size, depends on GPU memory thus start with max B and reduce if needed</span>
+<span class="c1"># You can calculate grad_accum_steps by total_batch_size // (B * T * ddp_world_size)</span>
 <span class="k">assert</span> <span class="n">total_batch_size</span> <span class="o">%</span> <span class="p">(</span><span class="n">B</span> <span class="o">*</span> <span class="n">T</span> <span class="o">*</span> <span class="n">ddp_world_size</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">"make sure total_batch_size is divisible by B * T * ddp_world_size"</span>
 <span class="n">grad_accum_steps</span> <span class="o">=</span> <span class="n">total_batch_size</span> <span class="o">//</span> <span class="p">(</span><span class="n">B</span> <span class="o">*</span> <span class="n">T</span> <span class="o">*</span> <span class="n">ddp_world_size</span><span class="p">)</span>
 <span class="k">if</span> <span class="n">master_process</span><span class="p">:</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"total desired batch size: </span><span class="si">{</span><span class="n">total_batch_size</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"=&gt; calculated gradient accumulation steps: </span><span class="si">{</span><span class="n">grad_accum_steps</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"B: </span><span class="si">{</span><span class="n">B</span><span class="si">}</span><span class="s2">, T: </span><span class="si">{</span><span class="n">T</span><span class="si">}</span><span class="s2">, ddp_world_size: </span><span class="si">{</span><span class="n">ddp_world_size</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
 <span class="c1"># # checkpoint code if multiple GPUs are working</span>
 <span class="c1"># print("I am GPU", ddp_rank)</span>
@@ -7827,15 +7864,17 @@ a.anchor-link {
 <span class="c1"># # torchrun --standalone --nproc_per_node=8 train_gpt2.py</span>
 
 <span class="c1"># get a data batch by using the DataLoaderLite</span>
-<span class="n">train_loader</span> <span class="o">=</span> <span class="n">DataLoaderLite</span><span class="p">(</span><span class="n">B</span><span class="o">=</span><span class="n">B</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span> <span class="n">process_rank</span><span class="o">=</span><span class="n">ddp_rank</span><span class="p">,</span> <span class="n">num_processes</span><span class="o">=</span><span class="n">ddp_world_size</span><span class="p">)</span> <span class="c1"># DDP implementation</span>
-
+<span class="n">train_loader</span> <span class="o">=</span> <span class="n">DataLoaderLite</span><span class="p">(</span><span class="n">B</span><span class="o">=</span><span class="n">B</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span> <span class="n">process_rank</span><span class="o">=</span><span class="n">ddp_rank</span><span class="p">,</span> <span class="n">num_processes</span><span class="o">=</span><span class="n">ddp_world_size</span><span class="p">,</span> <span class="n">split</span><span class="o">=</span><span class="s1">'train'</span><span class="p">)</span> <span class="c1"># DDP implementation</span>
+<span class="n">val_loader</span> <span class="o">=</span> <span class="n">DataLoaderLite</span><span class="p">(</span><span class="n">B</span><span class="o">=</span><span class="n">B</span><span class="p">,</span> <span class="n">T</span><span class="o">=</span><span class="n">T</span><span class="p">,</span> <span class="n">process_rank</span><span class="o">=</span><span class="n">ddp_rank</span><span class="p">,</span> <span class="n">num_processes</span><span class="o">=</span><span class="n">ddp_world_size</span><span class="p">,</span> <span class="n">split</span><span class="o">=</span><span class="s1">'val'</span><span class="p">)</span> <span class="c1"># DDP implementation</span>
 <span class="c1"># set the precision to high</span>
 <span class="n">torch</span><span class="o">.</span><span class="n">set_float32_matmul_precision</span><span class="p">(</span><span class="s1">'high'</span><span class="p">)</span>
 
 <span class="c1"># create the model, DDP will create the model on each GPU</span>
 <span class="n">model</span> <span class="o">=</span> <span class="n">GPT</span><span class="p">(</span><span class="n">GPTConfig</span><span class="p">(</span><span class="n">vocab_size</span><span class="o">=</span><span class="mi">50304</span><span class="p">))</span>
 <span class="n">model</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
-<span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span> <span class="c1"># Use torch compile only on CUDA</span>
+
+<span class="n">use_compile</span> <span class="o">=</span> <span class="kc">False</span> <span class="c1"># torch.compile interferes with HellaSwag eval and Generation. TODO fix</span>
+<span class="k">if</span> <span class="n">use_compile</span> <span class="ow">and</span> <span class="n">cuda_available</span><span class="p">:</span>
     <span class="n">model</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">master_process</span><span class="p">:</span>
         <span class="nb">print</span><span class="p">(</span><span class="s2">"Using torch compile for CUDA"</span><span class="p">)</span>
@@ -7850,8 +7889,10 @@ a.anchor-link {
 <span class="kn">import</span> <span class="nn">math</span>
 <span class="n">max_lr</span> <span class="o">=</span> <span class="mf">6e-4</span>
 <span class="n">min_lr</span> <span class="o">=</span> <span class="n">max_lr</span> <span class="o">*</span> <span class="mf">0.1</span>
-<span class="n">warmup_steps</span> <span class="o">=</span> <span class="mi">10</span>
-<span class="n">max_steps</span> <span class="o">=</span> <span class="mi">50</span> <span class="c1"># 19,073 steps is ~1 epoch, if data is 10B tokens and batch size 0.5M tokens</span>
+<span class="c1"># We are training 2**19 (=524,288) tokens per step. To train 10B tokens, it takes 19,073(=10e9 / 2**19) steps.</span>
+<span class="c1"># GPT2 paper said they warmed up for 375M tokens, which is 715(=375e6 / 2**19) steps with our settings.</span>
+<span class="n">warmup_steps</span> <span class="o">=</span> <span class="mi">715</span> <span class="c1"># 715 is very mild learning rate decay thus we can be more aggressive such as 100!</span>
+<span class="n">max_steps</span> <span class="o">=</span> <span class="mi">19073</span> <span class="c1"># 10B tokens / 2**19 tokens per step</span>
 <span class="k">def</span> <span class="nf">get_lr</span><span class="p">(</span><span class="n">it</span><span class="p">):</span>
     <span class="c1"># 1) linear warmup for warmup_iters steps</span>
     <span class="k">if</span> <span class="n">it</span> <span class="o">&lt;</span> <span class="n">warmup_steps</span><span class="p">:</span>
@@ -7870,20 +7911,82 @@ a.anchor-link {
 <span class="n">optimizer</span> <span class="o">=</span> <span class="n">raw_model</span><span class="o">.</span><span class="n">configure_optimizers</span><span class="p">(</span><span class="n">weight_decay</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">learning_rate</span><span class="o">=</span><span class="mf">6e-4</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
 
 <span class="c1"># training loop</span>
-<span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">50</span><span class="p">):</span>
+<span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">max_steps</span><span class="p">):</span>
     <span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">last_step</span> <span class="o">=</span> <span class="p">(</span><span class="n">step</span> <span class="o">==</span> <span class="n">max_steps</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+    
+    <span class="c1"># once in a while evaluate our validation loss</span>
+    <span class="k">if</span> <span class="n">step</span> <span class="o">%</span> <span class="mi">100</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">last_step</span><span class="p">:</span>
+        <span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+        <span class="n">val_loader</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+        <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+            <span class="n">val_loss_accum</span> <span class="o">=</span> <span class="mf">0.0</span>
+            <span class="n">val_loss_steps</span> <span class="o">=</span> <span class="mi">20</span>
+            <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">val_loss_steps</span><span class="p">):</span>
+                <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">val_loader</span><span class="o">.</span><span class="n">next_batch</span><span class="p">()</span>
+                <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">),</span> <span class="n">y</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+                <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">autocast</span><span class="p">(</span><span class="n">device_type</span><span class="o">=</span><span class="n">device</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">':'</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span><span class="p">):</span>
+                    <span class="n">logits</span><span class="p">,</span> <span class="n">loss</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+                <span class="n">loss</span> <span class="o">=</span> <span class="n">loss</span> <span class="o">/</span> <span class="n">val_loss_steps</span>
+                <span class="n">val_loss_accum</span> <span class="o">+=</span> <span class="n">loss</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">ddp</span><span class="p">:</span>
+            <span class="n">dist</span><span class="o">.</span><span class="n">all_reduce</span><span class="p">(</span><span class="n">val_loss_accum</span><span class="p">,</span> <span class="n">op</span><span class="o">=</span><span class="n">dist</span><span class="o">.</span><span class="n">ReduceOp</span><span class="o">.</span><span class="n">AVG</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">master_process</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"validation loss: </span><span class="si">{</span><span class="n">val_loss_accum</span><span class="o">.</span><span class="n">item</span><span class="p">()</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    
+    <span class="c1"># once in a while generate from the model (except step 0, which is noise)</span>
+    <span class="k">if</span> <span class="p">((</span><span class="n">step</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">step</span> <span class="o">%</span> <span class="mi">100</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="n">last_step</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="ow">not</span> <span class="n">use_compile</span><span class="p">):</span>
+        <span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+        <span class="n">num_return_sequences</span> <span class="o">=</span> <span class="mi">4</span>
+        <span class="n">max_length</span> <span class="o">=</span> <span class="mi">32</span>
+        <span class="n">tokens</span> <span class="o">=</span> <span class="n">enc</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"Hello, I'm a language model,"</span><span class="p">)</span>
+        <span class="n">tokens</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">tokens</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">long</span><span class="p">)</span>
+        <span class="n">tokens</span> <span class="o">=</span> <span class="n">tokens</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="n">num_return_sequences</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">xgen</span> <span class="o">=</span> <span class="n">tokens</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">sample_rng</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">Generator</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">sample_rng</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="mi">42</span> <span class="o">+</span> <span class="n">ddp_rank</span><span class="p">)</span>
+        <span class="k">while</span> <span class="n">xgen</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">max_length</span><span class="p">:</span>
+            <span class="c1"># forward the model to get the logits</span>
+            <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+                <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">autocast</span><span class="p">(</span><span class="n">device_type</span><span class="o">=</span><span class="n">device</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">':'</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span><span class="p">):</span>
+                    <span class="n">logits</span><span class="p">,</span> <span class="n">loss</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">xgen</span><span class="p">)</span> <span class="c1"># (B, T, vocab_size)</span>
+                <span class="c1"># take the logits at the last position</span>
+                <span class="n">logits</span> <span class="o">=</span> <span class="n">logits</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:]</span> <span class="c1"># (B, vocab_size)</span>
+                <span class="c1"># get the probabilities</span>
+                <span class="n">probs</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+                <span class="c1"># do top-k sampling of 50 (huggingface pipeline default)</span>
+                <span class="c1"># topk_probs here becomes (5, 50), topk_indices is (5, 50)</span>
+                <span class="n">topk_probs</span><span class="p">,</span> <span class="n">topk_indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">topk</span><span class="p">(</span><span class="n">probs</span><span class="p">,</span> <span class="mi">50</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+                <span class="c1"># select a token from the top-k probabilities</span>
+                <span class="c1"># note: multinomial does not demand the input to sum to 1</span>
+                <span class="n">ix</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">multinomial</span><span class="p">(</span><span class="n">topk_probs</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">generator</span><span class="o">=</span><span class="n">sample_rng</span><span class="p">)</span> <span class="c1"># (B, 1)</span>
+                <span class="c1"># gather the corresponding indices</span>
+                <span class="n">xcol</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="n">topk_indices</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">ix</span><span class="p">)</span> <span class="c1"># (B, 1)</span>
+                <span class="c1"># append to the sequence</span>
+                <span class="n">xgen</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">((</span><span class="n">xgen</span><span class="p">,</span> <span class="n">xcol</span><span class="p">),</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="c1"># print the generated text</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_return_sequences</span><span class="p">):</span>
+            <span class="n">tokens</span> <span class="o">=</span> <span class="n">xgen</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:</span><span class="n">max_length</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+            <span class="n">decoded</span> <span class="o">=</span> <span class="n">enc</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">tokens</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"rank </span><span class="si">{</span><span class="n">ddp_rank</span><span class="si">}</span><span class="s2"> sample </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">decoded</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+        
+    <span class="c1"># training loop</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
     <span class="n">optimizer</span><span class="o">.</span><span class="n">zero_grad</span><span class="p">()</span>
     <span class="n">loss_accum</span> <span class="o">=</span> <span class="mf">0.0</span>
     <span class="k">for</span> <span class="n">micro_step</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">grad_accum_steps</span><span class="p">):</span> <span class="c1"># loop over the gradient accumulation steps</span>
         <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">train_loader</span><span class="o">.</span><span class="n">next_batch</span><span class="p">()</span>
         <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">),</span> <span class="n">y</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">device</span> <span class="o">==</span> <span class="s2">"cuda"</span> <span class="ow">and</span> <span class="n">cuda_available</span><span class="p">:</span>
-            <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">autocast</span><span class="p">(</span><span class="n">device_type</span><span class="o">=</span><span class="s2">"cuda"</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span><span class="p">):</span>
-                <span class="c1"># print("using autocast")</span>
+        <span class="c1"># with torch.autocast(device_type=device, dtype=torch.bfloat16): # AK code but not working</span>
+        <span class="c1">#     logits, loss = model(x, y)</span>
+        
+        <span class="k">if</span> <span class="n">cuda_available</span><span class="p">:</span>
+            <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">autocast</span><span class="p">(</span><span class="n">device_type</span><span class="o">=</span><span class="n">device</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">':'</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span><span class="p">):</span>
+                <span class="c1"># print("I am GPU ", ddp_rank)</span>
                 <span class="n">logits</span><span class="p">,</span> <span class="n">loss</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
                 <span class="c1"># import code; code.interact(local=locals()) # debug</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="c1"># print("using no autocast")</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">"using no autocast because no CUDA"</span><span class="p">)</span>
             <span class="n">logits</span><span class="p">,</span> <span class="n">loss</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
         <span class="c1"># we have to scale the loss to account for the gradient accumulation.</span>
         <span class="c1"># because the gradients just add up on each successive backward() pass</span>
@@ -7907,16 +8010,16 @@ a.anchor-link {
     <span class="n">optimizer</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
     
     <span class="c1"># calculate tokens per second</span>
-    <span class="k">if</span> <span class="n">device</span> <span class="o">==</span> <span class="s2">"cuda"</span> <span class="ow">and</span> <span class="n">cuda_available</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">cuda_available</span><span class="p">:</span>
         <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
     <span class="k">elif</span> <span class="n">device</span> <span class="o">==</span> <span class="s2">"mps"</span><span class="p">:</span>
         <span class="n">torch</span><span class="o">.</span><span class="n">mps</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
     <span class="n">t1</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-    <span class="n">dt</span> <span class="o">=</span> <span class="p">(</span><span class="n">t1</span> <span class="o">-</span> <span class="n">t0</span><span class="p">)</span><span class="o">*</span><span class="mi">1000</span> <span class="c1"># time difference in ms</span>
-    <span class="n">tokens_processed</span> <span class="o">=</span> <span class="n">train_loader</span><span class="o">.</span><span class="n">B</span> <span class="o">*</span> <span class="n">train_loader</span><span class="o">.</span><span class="n">T</span> <span class="o">*</span> <span class="n">ddp_world_size</span>
-    <span class="n">tokens_per_second</span> <span class="o">=</span> <span class="n">tokens_processed</span> <span class="o">/</span> <span class="n">dt</span> <span class="o">*</span> <span class="mi">1000</span>
+    <span class="n">dt</span> <span class="o">=</span> <span class="n">t1</span> <span class="o">-</span> <span class="n">t0</span> <span class="c1"># time difference in ms</span>
+    <span class="n">tokens_processed</span> <span class="o">=</span> <span class="n">train_loader</span><span class="o">.</span><span class="n">B</span> <span class="o">*</span> <span class="n">train_loader</span><span class="o">.</span><span class="n">T</span> <span class="o">*</span> <span class="n">grad_accum_steps</span> <span class="o">*</span> <span class="n">ddp_world_size</span>
+    <span class="n">tokens_per_second</span> <span class="o">=</span> <span class="n">tokens_processed</span> <span class="o">/</span> <span class="n">dt</span>
     <span class="k">if</span> <span class="n">master_process</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"step </span><span class="si">{</span><span class="n">step</span><span class="si">:</span><span class="s2">4d</span><span class="si">}</span><span class="s2"> | loss: </span><span class="si">{</span><span class="n">loss_accum</span><span class="o">.</span><span class="n">item</span><span class="p">()</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2"> | lr: </span><span class="si">{</span><span class="n">lr</span><span class="si">:</span><span class="s2">.4e</span><span class="si">}</span><span class="s2"> | norm: </span><span class="si">{</span><span class="n">norm</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> | dt: </span><span class="si">{</span><span class="n">dt</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">ms | tok/sec: </span><span class="si">{</span><span class="n">tokens_per_second</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"step </span><span class="si">{</span><span class="n">step</span><span class="si">:</span><span class="s2">4d</span><span class="si">}</span><span class="s2"> | loss: </span><span class="si">{</span><span class="n">loss_accum</span><span class="o">.</span><span class="n">item</span><span class="p">()</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2"> | lr: </span><span class="si">{</span><span class="n">lr</span><span class="si">:</span><span class="s2">.4e</span><span class="si">}</span><span class="s2"> | norm: </span><span class="si">{</span><span class="n">norm</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> | dt: </span><span class="si">{</span><span class="n">dt</span><span class="o">*</span><span class="mi">1000</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">ms | tok/sec: </span><span class="si">{</span><span class="n">tokens_per_second</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 <span class="c1"># print(logits.shape)</span>
 <span class="c1"># print(loss)</span>
 
@@ -7926,48 +8029,6 @@ a.anchor-link {
 
 
 <span class="kn">import</span> <span class="nn">sys</span><span class="p">;</span> <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-
-<span class="c1"># prefix tokens</span>
-<span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
-<span class="n">num_return_sequences</span> <span class="o">=</span> <span class="mi">5</span>
-<span class="n">max_length</span> <span class="o">=</span> <span class="mi">30</span>
-
-<span class="c1"># prefix tokens</span>
-<span class="kn">import</span> <span class="nn">tiktoken</span>
-<span class="n">enc</span> <span class="o">=</span> <span class="n">tiktoken</span><span class="o">.</span><span class="n">get_encoding</span><span class="p">(</span><span class="s1">'gpt2'</span><span class="p">)</span>
-<span class="n">tokens</span> <span class="o">=</span> <span class="n">enc</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"Hello, I'm a language model,"</span><span class="p">)</span>
-<span class="n">tokens</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">tokens</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">long</span><span class="p">)</span> <span class="c1"># (8,)</span>
-<span class="n">tokens</span> <span class="o">=</span> <span class="n">tokens</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="n">num_return_sequences</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="c1"># (5, 8)</span>
-<span class="c1"># x = tokens.to(device='cuda' if torch.cuda.is_available() else 'cpu')</span>
-<span class="n">x</span> <span class="o">=</span> <span class="n">tokens</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
-
-<span class="c1"># generate! right now x is (B,T) where B = 5, T = 8</span>
-<span class="c1"># set the seed to 42</span>
-<span class="n">torch</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
-<span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
-<span class="k">while</span> <span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">max_length</span><span class="p">:</span>
-    <span class="c1"># forward the model to get the logits</span>
-    <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
-        <span class="n">logits</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="c1"># logits is of shape (B, T, vocab_size)</span>
-        <span class="c1"># take the logits at the last position</span>
-        <span class="n">logits</span> <span class="o">=</span> <span class="n">logits</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:]</span> <span class="c1"># (B, vocab_size)</span>
-        <span class="c1"># get the probabilities</span>
-        <span class="n">probs</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-        <span class="c1"># do top-k sampling of 50 (Huggingface pipeline default)</span>
-        <span class="c1"># topk_probs here becomes (5,50), topk_indices becomes (5,50)</span>
-        <span class="n">topk_probs</span><span class="p">,</span> <span class="n">topk_indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">topk</span><span class="p">(</span><span class="n">probs</span><span class="p">,</span> <span class="mi">50</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-        <span class="c1"># select a token from the top-k probabilities</span>
-        <span class="n">ix</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">multinomial</span><span class="p">(</span><span class="n">topk_probs</span><span class="p">,</span> <span class="n">num_samples</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="c1"># (B, 1)</span>
-        <span class="c1"># gather the corresponding indices</span>
-        <span class="n">xcol</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="n">topk_indices</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">ix</span><span class="p">)</span> <span class="c1"># (B, 1)</span>
-        <span class="c1"># append to the sequence</span>
-        <span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">((</span><span class="n">x</span><span class="p">,</span> <span class="n">xcol</span><span class="p">),</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="c1"># (B, T+1)</span>
-
-<span class="c1"># print the generated sequences</span>
-<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_return_sequences</span><span class="p">):</span>
-    <span class="n">tokens</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:</span><span class="n">max_length</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
-    <span class="n">decoded</span> <span class="o">=</span> <span class="n">enc</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">tokens</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">"&gt;"</span><span class="p">,</span> <span class="n">decoded</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
